@@ -1,2 +1,2 @@
 numpy
-virxerlu-rlib
+virxerlu-rlib==0.2
