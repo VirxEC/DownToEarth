@@ -28,6 +28,7 @@ MIN_ADJUST_RADIANS = 0.5
 
 class Bot(BaseAgent):
     def initialize_agent(self):
+        self.ready = False
         self.me = car_object(self.index)
         self.boost_accel = 991 + 2 / 3
         self.target = Vector(y=5120 * [1, -1][self.team])
@@ -37,11 +38,17 @@ class Bot(BaseAgent):
         rlru.load_soccar() 
 
     def get_output(self, packet: GameTickPacket):
+        if not self.ready:
+            field_info = self.get_field_info()
+            self.boosts = tuple(boost_object(i, field_info.boost_pads[i].location, field_info.boost_pads[i].is_full_boost) for i in range(field_info.num_boosts))
+            self.ready = True
+
         start = time_ns()
+
+        set(map(lambda pad: pad.update(packet), self.boosts))
 
         self.me.update(packet)
         self.time = packet.game_info.seconds_elapsed
-        ball_radius = packet.game_ball.collision_shape.sphere.diameter / 2
 
         rlru.tick(
             time=self.time,
@@ -68,6 +75,18 @@ class Bot(BaseAgent):
         shot = rlru.calculate_intercept(list(self.target))
 
         if not shot['found']:
+            boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
+
+            # if there's at least one large and active boost
+            if len(boosts) > 0:
+                # Get the closest boost
+                closest_boost = min(boosts, key=lambda boost: boost.location.dist(self.me.location))
+
+                # Goto the nearest boost
+                local_final_target = self.me.local_location(closest_boost.location)
+                angle = math.atan2(local_final_target.y, local_final_target.x)
+                return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
+            
             return SimpleControllerState()
 
         future_ball_location = Vector(*rlru.get_slice(shot['time'])['location'])
@@ -192,6 +211,16 @@ class hitbox_object:
         self.width = hitbox.width
         self.height = hitbox.height
 
+
+class boost_object:
+    def __init__(self, index, location, large):
+        self.index = index
+        self.location = Vector.from_vector(location)
+        self.active = True
+        self.large = large
+
+    def update(self, packet):
+        self.active = packet.game_boosts[self.index].is_active
 
 class car_object:
     # objects convert the gametickpacket in something a little friendlier to use
