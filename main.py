@@ -77,7 +77,7 @@ class Bot(BaseAgent):
 
         T = eta - self.time
 
-        shot_info = rlru.calc_dr_and_ft(list(self.target), shot['time'])
+        shot_info = rlru.calc_dr_and_ft(list(self.target), eta)
 
         # print()
         # for thing in shot_info['debug_stuff']:
@@ -148,7 +148,7 @@ class Bot(BaseAgent):
         self.tick_times.append(round((end - start) / 1_000_000, 3))
         while len(self.tick_times) > 120:
             del self.tick_times[0]
-        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Average ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
+        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(eta, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
 
         return controller
 
