@@ -75,19 +75,22 @@ class Bot(BaseAgent):
         shot = rlru.calculate_intercept(list(self.target))
 
         if not shot['found']:
-            boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
+            if self.me.boost < 60:
+                boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
 
-            # if there's at least one large and active boost
-            if len(boosts) > 0:
-                # Get the closest boost
-                closest_boost = min(boosts, key=lambda boost: boost.location.dist(self.me.location))
+                # if there's at least one large and active boost
+                if len(boosts) > 0:
+                    # Get the closest boost
+                    closest_boost = min(boosts, key=lambda boost: boost.location.dist(self.me.location))
 
-                # Goto the nearest boost
-                local_final_target = self.me.local_location(closest_boost.location)
-                angle = math.atan2(local_final_target.y, local_final_target.x)
-                return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
+                    # Goto the nearest boost
+                    local_final_target = self.me.local_location(closest_boost.location)
+                    angle = math.atan2(local_final_target.y, local_final_target.x)
+                    return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
             
-            return SimpleControllerState()
+            local_final_target = self.me.local_location(Vector(y=self.team * 5120))
+            angle = math.atan2(local_final_target.y, local_final_target.x)
+            return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
 
         future_ball_location = Vector(*rlru.get_slice(shot['time'])['location'])
         eta = shot['time']
