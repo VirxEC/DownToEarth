@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from time import time_ns
 from typing import Tuple
+from typing_extensions import final
 
 import virxrlru as rlru
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
@@ -101,13 +102,8 @@ class Bot(BaseAgent):
 
         shot_info = rlru.calc_dr_and_ft(list(self.target), eta)
 
-        # print()
-        # for thing in shot_info['debug_stuff']:
-        #     thing = Vector(*thing)
-        #     print(f"{round(thing)}")
-        #     self.draw_point(Vector(*thing), self.renderer.red())
-
         final_target = Vector(*shot_info['final_target'])
+        self.draw_point(final_target, self.renderer.red())
         distance_remaining = shot_info['distance_remaining']
 
         local_final_target = self.me.local_location(final_target.flatten())
@@ -205,14 +201,16 @@ class hitbox_object:
         self.length = length
         self.width = width
         self.height = height
+        self.offset = Vector()
 
     def __getitem__(self, index):
         return (self.length, self.width, self.height)[index]
 
-    def from_hitbox(self, hitbox):
-        self.length = hitbox.length
-        self.width = hitbox.width
-        self.height = hitbox.height
+    def from_car(self, car):
+        self.length = car.hitbox.length
+        self.width = car.hitbox.width
+        self.height = car.hitbox.height
+        self.offset = Vector.from_vector(car.hitbox_offset)
 
 
 class boost_object:
@@ -260,6 +258,7 @@ class car_object:
             "velocity": tuple(self.velocity),
             "angular_velocity": tuple(self.angular_velocity),
             "hitbox": tuple(self.hitbox),
+            "hitbox_offset": tuple(self.hitbox.offset),
             "pitch": self.orientation.pitch,
             "yaw": self.orientation.yaw,
             "roll": self.orientation.roll,
@@ -277,7 +276,7 @@ class car_object:
         self.velocity = Vector.from_vector(car_phy.velocity)
         self.orientation = Matrix3.from_rotator(car_phy.rotation)
         self.angular_velocity = self.orientation.dot((car_phy.angular_velocity.x, car_phy.angular_velocity.y, car_phy.angular_velocity.z))
-        self.hitbox.from_hitbox(car.hitbox)
+        self.hitbox.from_car(car)
         self.demolished = car.is_demolished
         self.airborne = not car.has_wheel_contact
         self.jumped = car.jumped
