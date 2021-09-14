@@ -73,7 +73,7 @@ class Bot(BaseAgent):
             car=self.me.get_raw()
         )
 
-        shot = rlru.calculate_intercept(list(self.target))
+        shot = rlru.calculate_intercept(list(self.target), all=False)
 
         if not shot['found']:
             if self.me.boost < 60:
@@ -89,7 +89,7 @@ class Bot(BaseAgent):
                     angle = math.atan2(local_final_target.y, local_final_target.x)
                     return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
             
-            local_final_target = self.me.local_location(Vector(y=self.team * 5120))
+            local_final_target = self.me.local_location(Vector(y=(-1, 1)[self.team] * 5120))
             angle = math.atan2(local_final_target.y, local_final_target.x)
             return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
 
