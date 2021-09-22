@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import math
 from time import time_ns
-from typing import Tuple
-from typing_extensions import final
 
 import virxrlru as rlru
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 
+from eph import ProfileHandler
 from utils import *
 from vec import Matrix3, Vector
 
@@ -35,8 +34,12 @@ class Bot(BaseAgent):
         self.target = Vector(y=5120 * [1, -1][self.team])
         self.time = 0
         self.tick_times = []
+        self.profiles = ProfileHandler()
 
         rlru.load_soccar() 
+
+    def retire(self):
+        self.profiles.stop()
 
     def get_output(self, packet: GameTickPacket):
         if not self.ready:
@@ -50,6 +53,8 @@ class Bot(BaseAgent):
 
         self.me.update(packet)
         self.time = packet.game_info.seconds_elapsed
+
+        self.profiles.packets.put(packet)
 
         rlru.tick(
             time=self.time,

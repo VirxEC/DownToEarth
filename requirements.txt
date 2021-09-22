@@ -1,2 +1,3 @@
 numpy
 virxerlu-rlib==0.3.*
+requests
