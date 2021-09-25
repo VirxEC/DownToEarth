@@ -1,7 +1,9 @@
+import json
 import math
 import re
 from queue import Queue
 from threading import Thread
+from traceback import print_exc
 from typing import List
 
 import requests
@@ -145,8 +147,10 @@ class PacketHeuristics:
             if car.is_demolished:
                 continue
 
-            if car.name not in self.car_tracker:
-                self.car_tracker[car.name] = {
+            car_name = re.split(r' \(\d+\)$', car.name)[0]
+
+            if car_name not in self.car_tracker:
+                self.car_tracker[car_name] = {
                     "last_wheel_contact": {
                         "time": -1,
                         "up": Vector(),
@@ -157,39 +161,39 @@ class PacketHeuristics:
                     "foes": -1
                 }
 
-            if car.name not in self.cars:
-                self.cars[car.name] = {}
+            if car_name not in self.cars:
+                self.cars[car_name] = {}
 
-            friends = self.car_tracker[car.name]['friends'] = self.get_friend_count(car.team)
-            foes = self.car_tracker[car.name]['foes'] = self.get_foe_count(car.team)
+            friends = self.car_tracker[car_name]['friends'] = self.get_friend_count(car.team)
+            foes = self.car_tracker[car_name]['foes'] = self.get_foe_count(car.team)
 
-            if friends not in self.cars[car.name]:
-                self.cars[car.name][friends] = {}
+            if friends not in self.cars[car_name]:
+                self.cars[car_name][friends] = {}
 
-            if foes not in self.cars[car.name][friends]:
-                self.cars[car.name][friends][foes] = {}
+            if foes not in self.cars[car_name][friends]:
+                self.cars[car_name][friends][foes] = {}
 
-            zone_id = self.car_tracker[car.name]['zone_id'] = self.get_zone_id(car.physics.location)
+            zone_id = self.car_tracker[car_name]['zone_id'] = self.get_zone_id(car.physics.location)
 
             if zone_id is None:
-                print(f"WARNING: zone_id for {car.name} was None")
+                print(f"WARNING: zone_id for {car_name} was None")
                 continue
 
-            if len(self.cars[car.name][friends][foes]) == 0:
-                self.cars[car.name][friends][foes] = {i: CarHeuristic() for i in range(self.field_dimensions[0] * self.field_dimensions[1])}
-            elif zone_id not in self.cars[car.name][friends][foes]:
-                self.cars[car.name][friends][foes][zone_id] = CarHeuristic()
+            if len(self.cars[car_name][friends][foes]) == 0:
+                self.cars[car_name][friends][foes] = {i: CarHeuristic() for i in range(self.field_dimensions[0] * self.field_dimensions[1])}
+            elif zone_id not in self.cars[car_name][friends][foes]:
+                self.cars[car_name][friends][foes][zone_id] = CarHeuristic()
 
             if car.has_wheel_contact:
-                self.car_tracker[car.name]['last_wheel_contact']['time'] = self.time
-                self.car_tracker[car.name]['last_wheel_contact']['location'] = Vector.from_vector(car.physics.location)
+                self.car_tracker[car_name]['last_wheel_contact']['time'] = self.time
+                self.car_tracker[car_name]['last_wheel_contact']['location'] = Vector.from_vector(car.physics.location)
                 CP = math.cos(car.physics.rotation.pitch)
                 SP = math.sin(car.physics.rotation.pitch)
                 CY = math.cos(car.physics.rotation.yaw)
                 SY = math.sin(car.physics.rotation.yaw)
                 CR = math.cos(car.physics.rotation.roll)
                 SR = math.sin(car.physics.rotation.roll)
-                self.car_tracker[car.name]['last_wheel_contact']['up'] = Vector(-CR*CY*SP-SR*SY, -CR*SY*SP+SR*CY, CP*CR)
+                self.car_tracker[car_name]['last_wheel_contact']['up'] = Vector(-CR*CY*SP-SR*SY, -CR*SY*SP+SR*CY, CP*CR)
 
             if packet.game_info.is_kickoff_pause or self.time - self.last_pause_time < self.unpause_delay:
                 continue
@@ -202,20 +206,20 @@ class PacketHeuristics:
 
                 ball_sections = set()
                 for future_ball_zone_id, location in future_ball_zone_ids:
-                    ball_section = self.get_ball_section(location, car.name)
+                    ball_section = self.get_ball_section(location, car_name)
                     if ball_section not in ball_sections:
                         ball_sections.add(ball_section)
 
-                    self.cars[car.name][friends][foes][future_ball_zone_id][ball_section] = max(self.cars[car.name][friends][foes][future_ball_zone_id][ball_section] - car_loss, 0)
+                    self.cars[car_name][friends][foes][future_ball_zone_id][ball_section] = max(self.cars[car_name][friends][foes][future_ball_zone_id][ball_section] - car_loss, 0)
 
                 all_zones = future_zone_ids.copy()
                 for zone_id_ in surrounding_zone_ids:
                     if zone_id_ not in all_zones:
                         all_zones.add(zone_id_)
-                        self.cars[car.name][friends][foes][zone_id_][ball_section] = max(self.cars[car.name][friends][foes][zone_id_][ball_section] - car_loss, 0)
+                        self.cars[car_name][friends][foes][zone_id_][ball_section] = max(self.cars[car_name][friends][foes][zone_id_][ball_section] - car_loss, 0)
 
                 if not handled_touch and latest_touch.player_index == i and latest_touch.time_seconds > self.start_time:
-                    time_airborne = self.time - self.car_tracker[car.name]['last_wheel_contact']['time']
+                    time_airborne = self.time - self.car_tracker[car_name]['last_wheel_contact']['time']
                     divisors = [
                         car.has_wheel_contact,
                         1 in ball_sections and car.jumped,
@@ -225,7 +229,7 @@ class PacketHeuristics:
                     ]
                     ball_touch_section = divisors.index(True)
                     if ball_touch_section != 4:
-                        self.cars[car.name][friends][foes][zone_id][ball_touch_section] = min(self.cars[car.name][friends][foes][zone_id][ball_touch_section] + self.gain + car_loss, 1)
+                        self.cars[car_name][friends][foes][zone_id][ball_touch_section] = min(self.cars[car_name][friends][foes][zone_id][ball_touch_section] + self.gain + car_loss, 1)
             
         return True
     
@@ -300,40 +304,46 @@ class Zone2D:
 
 
 class ProfileHandler(Thread):
-    def __init__(self):
+    def __init__(self, car_index):
         super().__init__()
         self.packets = Queue()
         self.eph = PacketHeuristics()
+        self.index = car_index
 
     def stop(self):
+        # print(self.eph.cars)
         for name, friends_data in self.eph.cars.items():
+            # print(f"{name}, {friends_data}")
             for num_friends, foes_data in friends_data.items():
-                for num_foes, data in foes_data.items():
-                    while 1:
-                        try:
-                            requests.post("https://ml-online-collab.herokuapp.com/set_bot", data={"name": name, "num_foes": num_foes, "num_friends": num_friends, "data": data})
-                        except Exception as e:
-                            print(e)
+                # print(f"{num_friends}, {foes_data}")
+                for num_foes, raw_data in foes_data.items():
+                    data = {zone: heuristic.profile for zone, heuristic in raw_data.items()}
+                    
+                    try:
+                        requests.post("https://ml-online-collab.herokuapp.com/set_bot", data={"name": name, "foes": num_foes, "friends": num_friends, "data": json.dumps(data)})
+                    except Exception as e:
+                        print(e)
 
     def run(self):
-        profiles = {}
-
         while 1:
             try:
-                packet = self.packets.get()
+                packet, ball_prediction_struct = self.packets.get()
 
-                names = (re.split(r' \(\d+\)$', packet.game_cars[i].name)[0] for i in packet.num_cars if i != self.index)
-                for name in names:
-                    if name not in profiles:
-                        while 1:
-                            try:
-                                r = requests.post("https://ml-online-collab.herokuapp.com/get_bot", data={"name": name})
+                names = set(re.split(r' \(\d+\)$', packet.game_cars[i].name)[0] for i in range(packet.num_cars) if i != self.index)
+                for name in tuple(names):
+                    if name not in self.eph.cars:
+                        try:
+                            r = requests.post("https://ml-online-collab.herokuapp.com/get_bot", data={"name": name})
+
+                            if r.status_code == 200:
                                 self.eph.cars[name] = r.json()
-                                break
-                            except Exception as e:
-                                print(e)
+                                print(f"{name}: {self.eph.cars[name]}")
+                            elif r.status_code == 400:
+                                self.eph.cars[name] = {}
+                        except Exception as e:
+                            print_exc()
                 
-                self.eph.add_tick(packet)
-            except Exception:
-                continue
+                self.eph.add_tick(packet, ball_prediction_struct)
+            except Exception as e:
+                print(e)
 

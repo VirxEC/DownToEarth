@@ -34,7 +34,8 @@ class Bot(BaseAgent):
         self.target = Vector(y=5120 * [1, -1][self.team])
         self.time = 0
         self.tick_times = []
-        self.profiles = ProfileHandler()
+        self.profiles = ProfileHandler(self.index)
+        self.profiles.start()
 
         rlru.load_soccar() 
 
@@ -54,7 +55,7 @@ class Bot(BaseAgent):
         self.me.update(packet)
         self.time = packet.game_info.seconds_elapsed
 
-        self.profiles.packets.put(packet)
+        self.profiles.packets.put((packet, self.get_ball_prediction_struct()))
 
         rlru.tick(
             time=self.time,
