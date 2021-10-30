@@ -13,34 +13,46 @@ from vec import Matrix3, Vector
 
 COAST_ACC = 525
 BRAKE_ACC = 3500
-MIN_BOOST_TIME = 0.1
+MIN_BOOST_TIME = 3 / 120
 REACTION_TIME = 0.04
 
 BRAKE_COAST_TRANSITION = -(0.45 * BRAKE_ACC + 0.55 * COAST_ACC)  # -1863.75
 COASTING_THROTTLE_TRANSITION = -0.5 * COAST_ACC  # -262.5
 MIN_WALL_SPEED = -0.5 * BRAKE_ACC  # -1750
 
-MAX_TURN_RADIUS = 1 / 0.00076  # about 1315.8 - theoretical turn radius at 2600uu/s
+MAX_TURN_RADIUS = 1. / 0.00088
 
 NO_ADJUST_RADIANS = 0.001
 MIN_ADJUST_RADIANS = 0.5
 
+LEAGUE_PLAY = False
+
 
 class Bot(BaseAgent):
     def initialize_agent(self):
+        self.league_play = LEAGUE_PLAY
+
         self.ready = False
         self.me = car_object(self.index)
         self.boost_accel = 991 + 2 / 3
-        self.target = Vector(y=5120 * [1, -1][self.team])
         self.time = 0
         self.tick_times = []
-        self.profiles = ProfileHandler(self.index)
-        self.profiles.start()
+
+        team = [1, -1][self.team]
+        self.target = (
+            (team * 893, team * 5120, 321.3875),
+            (team * -893, team * 5120, 321.3875),
+        )
+
+        if self.league_play:
+            self.profiles = ProfileHandler(self.index)
+            self.profiles.start()
 
         rlru.load_soccar() 
 
     def retire(self):
-        self.profiles.stop()
+        if self.league_play:
+            self.profiles.stop()
 
     def get_output(self, packet: GameTickPacket):
         if not self.ready:
@@ -55,31 +67,36 @@ class Bot(BaseAgent):
         self.me.update(packet)
         self.time = packet.game_info.seconds_elapsed
 
-        self.profiles.packets.put((packet, self.get_ball_prediction_struct()))
+        if self.league_play:
+            self.profiles.packets.put((packet, self.get_ball_prediction_struct()))
 
+        if self.me.airborne:
+            return SimpleControllerState(throttle=1)
+
+        game_ball = packet.game_ball.physics
         rlru.tick(
             time=self.time,
             ball={
                 "location": [
-                    packet.game_ball.physics.location.x,
-                    packet.game_ball.physics.location.y,
-                    packet.game_ball.physics.location.z,
+                    game_ball.location.x,
+                    game_ball.location.y,
+                    game_ball.location.z,
                 ],
                 "velocity": [
-                    packet.game_ball.physics.velocity.x,
-                    packet.game_ball.physics.velocity.y,
-                    packet.game_ball.physics.velocity.z,
+                    game_ball.velocity.x,
+                    game_ball.velocity.y,
+                    game_ball.velocity.z,
                 ],
                 "angular_velocity": [
-                    packet.game_ball.physics.angular_velocity.x,
-                    packet.game_ball.physics.angular_velocity.y,
-                    packet.game_ball.physics.angular_velocity.z,
+                    game_ball.angular_velocity.x,
+                    game_ball.angular_velocity.y,
+                    game_ball.angular_velocity.z,
                 ],
             },
             car=self.me.get_raw()
         )
 
-        shot = rlru.calculate_intercept(list(self.target), all=False)
+        shot = rlru.calculate_intercept(self.target[0], self.target[1], all=False)
 
         if not shot['found']:
             if self.me.boost < 60:
@@ -93,10 +110,12 @@ class Bot(BaseAgent):
                     # Goto the nearest boost
                     local_final_target = self.me.local_location(closest_boost.location)
                     angle = math.atan2(local_final_target.y, local_final_target.x)
+                    # return SimpleControllerState()
                     return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
             
             local_final_target = self.me.local_location(Vector(y=(-1, 1)[self.team] * 5120))
             angle = math.atan2(local_final_target.y, local_final_target.x)
+            # return SimpleControllerState()
             return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
 
         future_ball_location = Vector(*rlru.get_slice(shot['time'])['location'])
@@ -106,7 +125,14 @@ class Bot(BaseAgent):
 
         T = eta - self.time
 
-        shot_info = rlru.calc_dr_and_ft(list(self.target), eta)
+        shot_info = rlru.calc_dr_and_ft(self.target[0], self.target[1], eta)
+
+        if len(shot_info['path_samples']) > 2:
+            self.renderer.draw_polyline_3d(tuple(Vector(sample[0], sample[1], 30) for sample in shot_info['path_samples']), self.renderer.lime())
+        else:
+            self.renderer.draw_line_3d(tuple(self.me.location), tuple(shot_info['final_target']), self.renderer.lime())
+
+        self.renderer.draw_line_3d(future_ball_location, tuple(shot_info["short_vector"]), self.renderer.lime())
 
         final_target = Vector(*shot_info['final_target'])
         self.draw_point(final_target, self.renderer.red())
@@ -115,23 +141,20 @@ class Bot(BaseAgent):
         local_final_target = self.me.local_location(final_target.flatten())
 
         car_speed = self.me.orientation.forward.dot(self.me.velocity)
-        controller = SimpleControllerState(throttle=-1)
+        controller = SimpleControllerState()
         required_turn_radius = radius_from_local_point(local_final_target)
 
         if required_turn_radius is None:
             controller.steer = 1 * sign(local_final_target.y)
             controller.handbrake = True
-        elif required_turn_radius >= MAX_TURN_RADIUS * 1.1:
+        elif required_turn_radius >= MAX_TURN_RADIUS * 1.4:
             angle = math.atan2(local_final_target.y, local_final_target.x)
             controller.steer = cap((35 * angle) ** 3 / 10, -1, 1)
         else:
-            controller.steer = cap(
-                turn_radius(abs(car_speed))
-                / required_turn_radius
-                * sign(local_final_target.y),
-                -1,
-                1,
-            )
+            controller.steer = turn_radius(abs(car_speed)) / required_turn_radius * sign(local_final_target.y)
+            if abs(controller.steer) > 1:
+                controller.steer = sign(controller.steer)
+                controller.handbrake = True
 
         if T > 0:
             speed_required = min(distance_remaining / T, 2300)
@@ -175,6 +198,7 @@ class Bot(BaseAgent):
         self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(eta, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
 
         return controller
+        # return SimpleControllerState()
 
     def draw_point(self, point: Vector, color):
         self.renderer.draw_line_3d(
