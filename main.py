@@ -96,7 +96,7 @@ class Bot(BaseAgent):
             car=self.me.get_raw()
         )
 
-        shot = rlru.calculate_intercept(self.target[0], self.target[1], all=False)
+        shot = rlru.get_shot_with_target(self.target[0], self.target[1], all=False)
 
         if not shot['found']:
             if self.me.boost < 60:
@@ -125,7 +125,7 @@ class Bot(BaseAgent):
 
         T = eta - self.time
 
-        shot_info = rlru.calc_dr_and_ft(self.target[0], self.target[1], eta)
+        shot_info = rlru.get_data_for_shot_with_target(self.target[0], self.target[1], eta, self.index)
 
         if len(shot_info['path_samples']) > 2:
             self.renderer.draw_polyline_3d(tuple(Vector(sample[0], sample[1], 30) for sample in shot_info['path_samples']), self.renderer.lime())
@@ -197,8 +197,8 @@ class Bot(BaseAgent):
             del self.tick_times[0]
         self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(eta, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
 
-        return controller
         # return SimpleControllerState()
+        return controller
 
     def draw_point(self, point: Vector, color):
         self.renderer.draw_line_3d(
@@ -297,6 +297,7 @@ class car_object:
             "airborne": self.airborne,
             "jumped": self.jumped,
             "doublejumped": self.doublejumped,
+            "index": self.index,
         }
 
     def update(self, packet: GameTickPacket):
