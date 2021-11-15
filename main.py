@@ -40,8 +40,8 @@ class Bot(BaseAgent):
 
         team = [1, -1][self.team]
         self.target = (
-            (team * 893, team * 5120, 321.3875),
-            (team * -893, team * 5120, 321.3875),
+            (team * 800, team * 5120, 321.3875),
+            (team * -800, team * 5120, 321.3875),
         )
 
         if self.league_play:
@@ -95,8 +95,8 @@ class Bot(BaseAgent):
             },
             car=self.me.get_raw()
         )
-
-        shot = rlru.get_shot_with_target(self.target[0], self.target[1], all=False)
+        
+        shot = rlru.get_shot_with_target(self.target[0], self.target[1], self.index, all=False)
 
         if not shot['found']:
             if self.me.boost < 60:
@@ -132,8 +132,6 @@ class Bot(BaseAgent):
         else:
             self.renderer.draw_line_3d(tuple(self.me.location), tuple(shot_info['final_target']), self.renderer.lime())
 
-        self.renderer.draw_line_3d(future_ball_location, tuple(shot_info["short_vector"]), self.renderer.lime())
-
         final_target = Vector(*shot_info['final_target'])
         self.draw_point(final_target, self.renderer.red())
         distance_remaining = shot_info['distance_remaining']
@@ -142,7 +140,7 @@ class Bot(BaseAgent):
 
         car_speed = self.me.orientation.forward.dot(self.me.velocity)
         controller = SimpleControllerState()
-        required_turn_radius = radius_from_local_point(local_final_target)
+        required_turn_radius = radius_from_points_with_directions(self.me.location, self.me.orientation.forward, final_target, Vector(*shot_info["shot_vector"])) if shot_info['face_shot_vector'] else radius_from_local_point(local_final_target)
 
         if required_turn_radius is None:
             controller.steer = 1 * sign(local_final_target.y)

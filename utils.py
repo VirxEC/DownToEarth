@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 
 from vec import Vector
@@ -29,7 +30,7 @@ def curvature(v):
     if 1750 <= v < 2500:
         return 0.0018 - 4e-7 * v
 
-    return 0
+    print("Invalid velocity")
 
 
 def sign(x: float) -> float:
@@ -60,3 +61,8 @@ def radius_from_local_point(a: Vector) -> Optional[float]:
         return abs(1 / (2*b.y / a.dot(b)))
     except ZeroDivisionError:
         return None
+
+
+def radius_from_points_with_directions(car_location: Vector, car_forward: Vector, p: Vector, d: Vector) -> float:
+    half_angle = d.angle2D(-car_forward) / 2.
+    return (car_location.dist2D(p) / 2.) / math.sin(half_angle) * math.tan(half_angle)
