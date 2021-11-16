@@ -73,28 +73,7 @@ class Bot(BaseAgent):
         if self.me.airborne:
             return SimpleControllerState(throttle=1)
 
-        game_ball = packet.game_ball.physics
-        rlru.tick(
-            time=self.time,
-            ball={
-                "location": [
-                    game_ball.location.x,
-                    game_ball.location.y,
-                    game_ball.location.z,
-                ],
-                "velocity": [
-                    game_ball.velocity.x,
-                    game_ball.velocity.y,
-                    game_ball.velocity.z,
-                ],
-                "angular_velocity": [
-                    game_ball.angular_velocity.x,
-                    game_ball.angular_velocity.y,
-                    game_ball.angular_velocity.z,
-                ],
-            },
-            car=self.me.get_raw()
-        )
+        rlru.tick(packet)
         
         shot = rlru.get_shot_with_target(self.target[0], self.target[1], self.index, all=False)
 
