@@ -64,5 +64,4 @@ def radius_from_local_point(a: Vector) -> Optional[float]:
 
 
 def radius_from_points_with_directions(car_location: Vector, car_forward: Vector, p: Vector, d: Vector) -> float:
-    half_angle = d.angle2D(-car_forward) / 2.
-    return (car_location.dist2D(p) / 2.) / math.sin(half_angle) * math.tan(half_angle)
+    return (car_location.dist2D(p) / 2) / (math.cos(d.angle2D(-car_forward) / 2))
