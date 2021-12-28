@@ -7,7 +7,6 @@ import virxrlru as rlru
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 
-from eph import ProfileHandler
 from utils import *
 from vec import Matrix3, Vector
 
@@ -25,13 +24,9 @@ MAX_TURN_RADIUS = 1. / 0.00088
 NO_ADJUST_RADIANS = 0.001
 MIN_ADJUST_RADIANS = 0.5
 
-LEAGUE_PLAY = False
-
 
 class Bot(BaseAgent):
     def initialize_agent(self):
-        self.league_play = LEAGUE_PLAY
-
         self.ready = False
         self.me = car_object(self.index)
         self.boost_accel = 991 + 2 / 3
@@ -44,15 +39,7 @@ class Bot(BaseAgent):
             (team * -800, team * 5120, 321.3875),
         )
 
-        if self.league_play:
-            self.profiles = ProfileHandler(self.index)
-            self.profiles.start()
-
-        rlru.load_soccar() 
-
-    def retire(self):
-        if self.league_play:
-            self.profiles.stop()
+        rlru.load_soccar()
 
     def get_output(self, packet: GameTickPacket):
         if not self.ready:
@@ -67,15 +54,12 @@ class Bot(BaseAgent):
         self.me.update(packet)
         self.time = packet.game_info.seconds_elapsed
 
-        if self.league_play:
-            self.profiles.packets.put((packet, self.get_ball_prediction_struct()))
-
         if self.me.airborne:
             return SimpleControllerState(throttle=1)
 
         rlru.tick(packet)
         
-        shot = rlru.get_shot_with_target(self.target[0], self.target[1], self.index, all=False)
+        shot = rlru.get_shot_with_target(self.target[0], self.target[1], self.index, {})
 
         if not shot['found']:
             if self.me.boost < 60:
@@ -104,7 +88,7 @@ class Bot(BaseAgent):
 
         T = eta - self.time
 
-        shot_info = rlru.get_data_for_shot_with_target(self.target[0], self.target[1], eta, self.index)
+        shot_info = rlru.get_data_for_shot_with_target(self.target[0], self.target[1], eta, self.index, {})
 
         if len(shot_info['path_samples']) > 2:
             self.renderer.draw_polyline_3d(tuple(Vector(sample[0], sample[1], 30) for sample in shot_info['path_samples']), self.renderer.lime())
@@ -119,19 +103,9 @@ class Bot(BaseAgent):
 
         car_speed = self.me.orientation.forward.dot(self.me.velocity)
         controller = SimpleControllerState()
-        required_turn_radius = radius_from_points_with_directions(self.me.location, self.me.orientation.forward, final_target, Vector(*shot_info["shot_vector"])) if shot_info['face_shot_vector'] else radius_from_local_point(local_final_target)
 
-        if required_turn_radius is None:
-            controller.steer = 1 * sign(local_final_target.y)
-            controller.handbrake = True
-        elif required_turn_radius >= MAX_TURN_RADIUS * 1.4:
-            angle = math.atan2(local_final_target.y, local_final_target.x)
-            controller.steer = cap((35 * angle) ** 3 / 10, -1, 1)
-        else:
-            controller.steer = turn_radius(abs(car_speed)) / required_turn_radius * sign(local_final_target.y)
-            if abs(controller.steer) > 1:
-                controller.steer = sign(controller.steer)
-                controller.handbrake = True
+        angle = math.atan2(local_final_target.y, local_final_target.x)
+        controller.steer = cap(3.4 * angle + 0.235 * self.me.angular_velocity.z, -1, 1)
 
         if T > 0:
             speed_required = min(distance_remaining / T, 2300)
@@ -172,7 +146,7 @@ class Bot(BaseAgent):
         self.tick_times.append(round((end - start) / 1_000_000, 3))
         while len(self.tick_times) > 120:
             del self.tick_times[0]
-        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(eta, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
+        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(eta, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}\nangle: {shot_info['face_angle']}", self.renderer.team_color(alt_color=True))
 
         # return SimpleControllerState()
         return controller
@@ -283,7 +257,8 @@ class car_object:
         self.location = Vector.from_vector(car_phy.location)
         self.velocity = Vector.from_vector(car_phy.velocity)
         self.orientation = Matrix3.from_rotator(car_phy.rotation)
-        self.angular_velocity = self.orientation.dot((car_phy.angular_velocity.x, car_phy.angular_velocity.y, car_phy.angular_velocity.z))
+        self.raw_angular_velocity = Vector.from_vector(car_phy.angular_velocity)
+        self.angular_velocity = self.orientation.dot(self.raw_angular_velocity)
         self.hitbox.from_car(car)
         self.demolished = car.is_demolished
         self.airborne = not car.has_wheel_contact
