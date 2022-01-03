@@ -53,15 +53,3 @@ def throttle_acceleration(car_velocity_x: float) -> float:
 
     x -= 1400
     return -16 * x + 160
-
-
-def radius_from_local_point(a: Vector) -> Optional[float]:
-    try:
-        b = a.flatten()
-        return abs(1 / (2*b.y / a.dot(b)))
-    except ZeroDivisionError:
-        return None
-
-
-def radius_from_points_with_angle(car_location: Vector, car_forward: Vector, p: Vector, a: float) -> float:
-    return (car_location.dist2D(p) / 2) / (math.cos(Vector(math.cos(a), math.sin(a)).angle2D(-car_forward) / 2))

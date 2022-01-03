@@ -146,7 +146,7 @@ class Bot(BaseAgent):
         self.tick_times.append(round((end - start) / 1_000_000, 3))
         while len(self.tick_times) > 120:
             del self.tick_times[0]
-        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(eta, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}\nangle: {shot_info['face_angle']}", self.renderer.team_color(alt_color=True))
+        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(eta, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
 
         # return SimpleControllerState()
         return controller
@@ -160,21 +160,6 @@ class Bot(BaseAgent):
 
     def draw_line(self, p1: Vector, p2: Vector, color):
         self.renderer.draw_line_3d(p1.to_vector3(), p2.to_vector3(), color)
-
-    def cap_in_field(self, target: Vector):
-        if abs(target.x) > 893 - self.me.hitbox.length:
-            target.y = cap(
-                target.y, -5120 + self.me.hitbox.length, 5120 - self.me.hitbox.length
-            )
-        target.x = (
-            cap(target.x, -893 + self.me.hitbox.length, 893 - self.me.hitbox.length)
-            if abs(self.me.location.y) > 5120 - (self.me.hitbox.length / 2)
-            else cap(
-                target.x, -4093 + self.me.hitbox.length, 4093 - self.me.hitbox.length
-            )
-        )
-
-        return target
 
 
 class hitbox_object:
