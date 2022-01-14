@@ -40,6 +40,10 @@ class Bot(BaseAgent):
         )
 
         rlru.load_soccar()
+        
+        self.last_touch = last_touch()
+        self.shot = None
+        self.shot_time = None
 
     def get_output(self, packet: GameTickPacket):
         if not self.ready:
@@ -52,16 +56,44 @@ class Bot(BaseAgent):
         set(map(lambda pad: pad.update(packet), self.boosts))
 
         self.me.update(packet)
+        new_touch = self.last_touch.update(packet)
         self.time = packet.game_info.seconds_elapsed
 
         if self.me.airborne:
             return SimpleControllerState(throttle=1)
 
         rlru.tick(packet)
-        
-        shot = rlru.get_shot_with_target(self.target[0], self.target[1], self.index, {})
 
-        if not shot['found']:
+        if new_touch or (self.shot is not None and self.shot['time'] < self.time):
+            if self.shot is not None:
+                rlru.remove_target(self.shot)
+            self.shot = None
+            self.shot_time = None
+
+        if self.shot is None:
+            shot = rlru.new_target(*self.target, self.index, {})
+            shot_info = rlru.get_shot_with_target(shot)
+            if shot_info['found']:
+                self.shot = shot
+                self.shot_time = shot_info['time']
+                rlru.confirm_shot(self.shot)
+        else:
+            shot = rlru.new_target(*self.target, self.index, {
+                "max_slice": round((self.shot_time - self.time) * 120),
+            })
+            shot_info = rlru.get_shot_with_target(shot)
+            if shot_info['found']:
+                rlru.remove_target(self.shot)
+                self.shot = shot
+                self.shot_time = shot_info['time']
+                rlru.confirm_target(self.shot)
+
+        if not shot_info['found']:
+            if self.shot is not None:
+                rlru.remove_target(self.shot)
+                self.shot = None
+                self.shot_time = None
+
             if self.me.boost < 60:
                 boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
 
@@ -81,14 +113,13 @@ class Bot(BaseAgent):
             # return SimpleControllerState()
             return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
 
-        future_ball_location = Vector(*rlru.get_slice(shot['time'])['location'])
-        eta = shot['time']
+        future_ball_location = Vector(*rlru.get_slice(shot_info['time'])['location'])
 
         self.draw_point(future_ball_location, self.renderer.purple())
 
-        T = eta - self.time
+        T = self.shot_time - self.time
 
-        shot_info = rlru.get_data_for_shot_with_target(self.target[0], self.target[1], eta, self.index, {})
+        shot_info = rlru.get_data_for_shot_with_target(self.shot)
 
         if len(shot_info['path_samples']) > 2:
             self.renderer.draw_polyline_3d(tuple(Vector(sample[0], sample[1], 30) for sample in shot_info['path_samples']), self.renderer.lime())
@@ -146,7 +177,7 @@ class Bot(BaseAgent):
         self.tick_times.append(round((end - start) / 1_000_000, 3))
         while len(self.tick_times) > 120:
             del self.tick_times[0]
-        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(eta, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
+        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(self.shot_time, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
 
         # return SimpleControllerState()
         return controller
@@ -160,6 +191,24 @@ class Bot(BaseAgent):
 
     def draw_line(self, p1: Vector, p2: Vector, color):
         self.renderer.draw_line_3d(p1.to_vector3(), p2.to_vector3(), color)
+
+
+class last_touch:
+    def __init__(self):
+        self.location = Vector()
+        self.normal = Vector()
+        self.time = -1
+        self.car = None
+
+    def update(self, packet):
+        touch = packet.game_ball.latest_touch
+        new_touch = self.time != touch
+        self.location = Vector.from_vector(touch.hit_location)
+        self.normal = Vector.from_vector(touch.hit_normal)
+        self.time = touch.time_seconds
+        self.car = car_object(touch.player_index, packet)
+
+        return new_touch
 
 
 class hitbox_object:
