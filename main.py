@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from time import time_ns
 
-import virxrlru as rlru
+import virx_erlu_rlib as rlru
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 
@@ -64,22 +64,47 @@ class Bot(BaseAgent):
 
         rlru.tick(packet)
 
-        if new_touch or (self.shot is not None and self.shot['time'] < self.time):
-            if self.shot is not None:
+        print("HELLO")
+
+        if self.shot is not None:
+            if new_touch or self.shot_time < self.time:
                 rlru.remove_target(self.shot)
-            self.shot = None
-            self.shot_time = None
+                self.shot = None
+                self.shot_time = None
 
         if self.shot is None:
             shot = rlru.new_target(*self.target, self.index, {})
             shot_info = rlru.get_shot_with_target(shot)
+
             if shot_info['found']:
                 self.shot = shot
                 self.shot_time = shot_info['time']
-                rlru.confirm_shot(self.shot)
-        else:
+                rlru.confirm_target(self.shot)
+            else:
+                if not shot_info['found']:
+                    if self.me.boost < 60:
+                        boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
+
+                        # if there's at least one large and active boost
+                        if len(boosts) > 0:
+                            # Get the closest boost
+                            closest_boost = min(boosts, key=lambda boost: boost.location.dist(self.me.location))
+
+                            # Goto the nearest boost
+                            local_final_target = self.me.local_location(closest_boost.location)
+                            angle = math.atan2(local_final_target.y, local_final_target.x)
+                            # return SimpleControllerState()
+                            return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
+                    
+                    local_final_target = self.me.local_location(Vector(y=(-1, 1)[self.team] * 5120))
+                    angle = math.atan2(local_final_target.y, local_final_target.x)
+                    # return SimpleControllerState()
+                    return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
+
+        max_time = self.shot_time - self.time - 0.1
+        if max_time > 0.1:
             shot = rlru.new_target(*self.target, self.index, {
-                "max_slice": round((self.shot_time - self.time) * 120),
+                "max_slice": round(max_time * 120),
             })
             shot_info = rlru.get_shot_with_target(shot)
             if shot_info['found']:
@@ -88,32 +113,7 @@ class Bot(BaseAgent):
                 self.shot_time = shot_info['time']
                 rlru.confirm_target(self.shot)
 
-        if not shot_info['found']:
-            if self.shot is not None:
-                rlru.remove_target(self.shot)
-                self.shot = None
-                self.shot_time = None
-
-            if self.me.boost < 60:
-                boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
-
-                # if there's at least one large and active boost
-                if len(boosts) > 0:
-                    # Get the closest boost
-                    closest_boost = min(boosts, key=lambda boost: boost.location.dist(self.me.location))
-
-                    # Goto the nearest boost
-                    local_final_target = self.me.local_location(closest_boost.location)
-                    angle = math.atan2(local_final_target.y, local_final_target.x)
-                    # return SimpleControllerState()
-                    return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
-            
-            local_final_target = self.me.local_location(Vector(y=(-1, 1)[self.team] * 5120))
-            angle = math.atan2(local_final_target.y, local_final_target.x)
-            # return SimpleControllerState()
-            return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
-
-        future_ball_location = Vector(*rlru.get_slice(shot_info['time'])['location'])
+        future_ball_location = Vector(*rlru.get_slice(self.shot_time)['location'])
 
         self.draw_point(future_ball_location, self.renderer.purple())
 
@@ -200,28 +200,28 @@ class last_touch:
         self.time = -1
         self.car = None
 
-    def update(self, packet):
+    def update(self, packet: GameTickPacket):
         touch = packet.game_ball.latest_touch
-        new_touch = self.time != touch
+        new_touch = self.time < touch.time_seconds
         self.location = Vector.from_vector(touch.hit_location)
         self.normal = Vector.from_vector(touch.hit_normal)
         self.time = touch.time_seconds
-        self.car = car_object(touch.player_index, packet)
+        self.car = car_object(touch.player_index).update(packet)
 
         return new_touch
 
 
 class hitbox_object:
-    def __init__(self, length=0, width=0, height=0):
+    def __init__(self, length: float=0, width: float=0, height: float=0):
         self.length = length
         self.width = width
         self.height = height
         self.offset = Vector()
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         return (self.length, self.width, self.height)[index]
 
-    def from_car(self, car):
+    def from_car(self, car: car_object):
         self.length = car.hitbox.length
         self.width = car.hitbox.width
         self.height = car.hitbox.height
@@ -229,19 +229,19 @@ class hitbox_object:
 
 
 class boost_object:
-    def __init__(self, index, location, large):
+    def __init__(self, index: int, location: Vector, large: bool):
         self.index = index
         self.location = Vector.from_vector(location)
         self.active = True
         self.large = large
 
-    def update(self, packet):
+    def update(self, packet: GameTickPacket):
         self.active = packet.game_boosts[self.index].is_active
 
 class car_object:
     # objects convert the gametickpacket in something a little friendlier to use
     # and are automatically updated by VirxERLU as the game runs
-    def __init__(self, index):
+    def __init__(self, index: int):
         self.location = Vector()
         self.orientation = Matrix3(simple=True)
         self.velocity = Vector()
@@ -255,16 +255,16 @@ class car_object:
         self.land_time = 0
         self.hitbox = hitbox_object()
 
-    def local(self, value):
+    def local(self, value: Vector):
         return self.orientation.dot(value)
 
-    def global_(self, value):
+    def global_(self, value: Vector):
         return self.orientation.g_dot(value)
 
-    def local_location(self, location):
+    def local_location(self, location: Vector):
         return self.local(location - self.location)
 
-    def local_flatten(self, value):
+    def local_flatten(self, value: Vector):
         return self.global_(self.local(value).flatten())
 
     def get_raw(self):
