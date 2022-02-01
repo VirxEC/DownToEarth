@@ -64,8 +64,6 @@ class Bot(BaseAgent):
 
         rlru.tick(packet)
 
-        print("HELLO")
-
         if self.shot is not None:
             if new_touch or self.shot_time < self.time:
                 rlru.remove_target(self.shot)
@@ -73,15 +71,15 @@ class Bot(BaseAgent):
                 self.shot_time = None
 
         if self.shot is None:
-            shot = rlru.new_target(*self.target, self.index, {})
+            shot = rlru.new_target(*self.target, self.index)
             shot_info = rlru.get_shot_with_target(shot)
 
-            if shot_info['found']:
+            if shot_info.found:
                 self.shot = shot
-                self.shot_time = shot_info['time']
+                self.shot_time = shot_info.time
                 rlru.confirm_target(self.shot)
             else:
-                if not shot_info['found']:
+                if not shot_info.found:
                     if self.me.boost < 60:
                         boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
 
@@ -103,17 +101,15 @@ class Bot(BaseAgent):
 
         max_time = self.shot_time - self.time - 0.1
         if max_time > 0.1:
-            shot = rlru.new_target(*self.target, self.index, {
-                "max_slice": round(max_time * 120),
-            })
+            shot = rlru.new_target(*self.target, self.index, max_slice=round(max_time * 120))
             shot_info = rlru.get_shot_with_target(shot)
-            if shot_info['found']:
+            if shot_info.found:
                 rlru.remove_target(self.shot)
                 self.shot = shot
-                self.shot_time = shot_info['time']
+                self.shot_time = shot_info.time
                 rlru.confirm_target(self.shot)
 
-        future_ball_location = Vector(*rlru.get_slice(self.shot_time)['location'])
+        future_ball_location = Vector(*rlru.get_slice(self.shot_time).location)
 
         self.draw_point(future_ball_location, self.renderer.purple())
 
@@ -121,14 +117,14 @@ class Bot(BaseAgent):
 
         shot_info = rlru.get_data_for_shot_with_target(self.shot)
 
-        if len(shot_info['path_samples']) > 2:
-            self.renderer.draw_polyline_3d(tuple(Vector(sample[0], sample[1], 30) for sample in shot_info['path_samples']), self.renderer.lime())
+        if len(shot_info.path_samples) > 2:
+            self.renderer.draw_polyline_3d(tuple((sample[0], sample[1], 30) for sample in shot_info.path_samples), self.renderer.lime())
         else:
-            self.renderer.draw_line_3d(tuple(self.me.location), tuple(shot_info['final_target']), self.renderer.lime())
+            self.renderer.draw_line_3d(tuple(self.me.location), tuple(shot_info.final_target), self.renderer.lime())
 
-        final_target = Vector(*shot_info['final_target'])
+        final_target = Vector(*shot_info.final_target)
         self.draw_point(final_target, self.renderer.red())
-        distance_remaining = shot_info['distance_remaining']
+        distance_remaining = shot_info.distance_remaining
 
         local_final_target = self.me.local_location(final_target.flatten())
 
