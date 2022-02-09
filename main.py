@@ -115,7 +115,13 @@ class Bot(BaseAgent):
 
         T = self.shot_time - self.time
 
-        shot_info = rlru.get_data_for_shot_with_target(self.shot)
+        try:
+            shot_info = rlru.get_data_for_shot_with_target(self.shot)
+        except Exception as e:
+            self.shot = None
+            self.shot_time = None
+            print(f"Error getting shot info: {e}")
+            return SimpleControllerState()
 
         if len(shot_info.path_samples) > 2:
             self.renderer.draw_polyline_3d(tuple((sample[0], sample[1], 30) for sample in shot_info.path_samples), self.renderer.lime())
