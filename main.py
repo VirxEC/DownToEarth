@@ -101,7 +101,8 @@ class Bot(BaseAgent):
 
         max_time = self.shot_time - self.time - 0.1
         if max_time > 0.1:
-            shot = rlru.new_target(*self.target, self.index, max_slice=round(max_time * 120))
+            options = rlru.TargetOptions(max_slice=round(max_time * 120))
+            shot = rlru.new_target(*self.target, self.index, options)
             shot_info = rlru.get_shot_with_target(shot)
             if shot_info.found:
                 rlru.remove_target(self.shot)
