@@ -45,6 +45,19 @@ class Bot(BaseAgent):
         self.shot = None
         self.shot_time = None
 
+    def pop(self):
+        rlru.remove_target(self.shot)
+        self.shot = None
+        self.shot_time = None
+
+    def push(self, shot, shot_time):
+        if self.shot is not None:
+            self.pop()
+        
+        self.shot = shot
+        self.shot_time = shot_time
+        rlru.confirm_target(self.shot)
+
     def get_output(self, packet: GameTickPacket):
         if not self.ready:
             field_info = self.get_field_info()
@@ -62,22 +75,19 @@ class Bot(BaseAgent):
         if self.me.airborne:
             return SimpleControllerState(throttle=1)
 
-        rlru.tick(packet)
-
         if self.shot is not None:
             if new_touch or self.shot_time < self.time:
-                rlru.remove_target(self.shot)
-                self.shot = None
-                self.shot_time = None
+                self.pop()
+
+        rlru.tick(packet)
+        rlru.print_targets()
 
         if self.shot is None:
             shot = rlru.new_target(*self.target, self.index)
             shot_info = rlru.get_shot_with_target(shot)
 
             if shot_info.found:
-                self.shot = shot
-                self.shot_time = shot_info.time
-                rlru.confirm_target(self.shot)
+                self.push(shot, shot_info.time)
             else:
                 if not shot_info.found:
                     if self.me.boost < 60:
@@ -104,11 +114,9 @@ class Bot(BaseAgent):
             options = rlru.TargetOptions(max_slice=round(max_time * 120))
             shot = rlru.new_target(*self.target, self.index, options)
             shot_info = rlru.get_shot_with_target(shot)
+
             if shot_info.found:
-                rlru.remove_target(self.shot)
-                self.shot = shot
-                self.shot_time = shot_info.time
-                rlru.confirm_target(self.shot)
+                self.push(shot, shot_info.time)
 
         future_ball_location = Vector(*rlru.get_slice(self.shot_time).location)
 
@@ -118,9 +126,12 @@ class Bot(BaseAgent):
 
         try:
             shot_info = rlru.get_data_for_shot_with_target(self.shot)
+        except AssertionError:
+            self.pop()
+            print("Ball location changed")
+            return SimpleControllerState()
         except Exception as e:
-            self.shot = None
-            self.shot_time = None
+            self.pop()
             print(f"Error getting shot info: {e}")
             return SimpleControllerState()
 
