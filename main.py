@@ -280,24 +280,6 @@ class car_object:
     def local_flatten(self, value: Vector):
         return self.global_(self.local(value).flatten())
 
-    def get_raw(self):
-        return {
-            "location": tuple(self.location),
-            "velocity": tuple(self.velocity),
-            "angular_velocity": tuple(self.angular_velocity),
-            "hitbox": tuple(self.hitbox),
-            "hitbox_offset": tuple(self.hitbox.offset),
-            "pitch": self.orientation.pitch,
-            "yaw": self.orientation.yaw,
-            "roll": self.orientation.roll,
-            "boost": self.boost,
-            "demolished": self.demolished,
-            "airborne": self.airborne,
-            "jumped": self.jumped,
-            "doublejumped": self.doublejumped,
-            "index": self.index,
-        }
-
     def update(self, packet: GameTickPacket):
         car = packet.game_cars[self.index]
         car_phy = car.physics
