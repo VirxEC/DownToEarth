@@ -84,36 +84,35 @@ class Bot(BaseAgent):
 
         if self.shot is None:
             shot = rlru.new_target(*self.target, self.index)
-            shot_info = rlru.get_shot_with_target(shot)
+            shot_info = rlru.get_shot_with_target(shot, may_ground_shot=True, only=True)
 
             if shot_info.found:
                 self.push(shot, shot_info.time)
             else:
-                if not shot_info.found:
-                    if self.me.boost < 60:
-                        boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
+                if self.me.boost < 60:
+                    boosts = tuple(boost for boost in self.boosts if boost.active and boost.large)
 
-                        # if there's at least one large and active boost
-                        if len(boosts) > 0:
-                            # Get the closest boost
-                            closest_boost = min(boosts, key=lambda boost: boost.location.dist(self.me.location))
+                    # if there's at least one large and active boost
+                    if len(boosts) > 0:
+                        # Get the closest boost
+                        closest_boost = min(boosts, key=lambda boost: boost.location.dist(self.me.location))
 
-                            # Goto the nearest boost
-                            local_final_target = self.me.local_location(closest_boost.location)
-                            angle = math.atan2(local_final_target.y, local_final_target.x)
-                            # return SimpleControllerState()
-                            return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
-                    
-                    local_final_target = self.me.local_location(Vector(y=(-1, 1)[self.team] * 5120))
-                    angle = math.atan2(local_final_target.y, local_final_target.x)
-                    # return SimpleControllerState()
-                    return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
+                        # Goto the nearest boost
+                        local_final_target = self.me.local_location(closest_boost.location)
+                        angle = math.atan2(local_final_target.y, local_final_target.x)
+                        # return SimpleControllerState()
+                        return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
+                
+                local_final_target = self.me.local_location(Vector(y=(-1, 1)[self.team] * 5120))
+                angle = math.atan2(local_final_target.y, local_final_target.x)
+                # return SimpleControllerState()
+                return SimpleControllerState(throttle=1, steer=cap((35 * angle) ** 3 / 10, -1, 1))
 
         max_time = self.shot_time - self.time - 0.1
         if max_time > 0.1:
             options = rlru.TargetOptions(max_slice=round(max_time * 120))
             shot = rlru.new_target(*self.target, self.index, options)
-            shot_info = rlru.get_shot_with_target(shot)
+            shot_info = rlru.get_shot_with_target(shot, may_ground_shot=True, only=True)
 
             if shot_info.found:
                 self.push(shot, shot_info.time)
