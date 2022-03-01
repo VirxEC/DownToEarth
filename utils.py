@@ -1,19 +1,13 @@
-import math
-from typing import Optional
-
-from vec import Vector
-
-
 def cap(x, low, high):
     return low if x < low else (high if x > high else x)
 
 
-def turn_radius(v):
+def turn_radius(v: float) -> float:
     # v is the magnitude of the velocity in the car's forward direction
     return 1.0 / curvature(v)
 
 
-def curvature(v):
+def curvature(v: float) -> float:
     # v is the magnitude of the velocity in the car's forward direction
     if 0 <= v < 500:
         return 0.0069 - 5.84e-6 * v

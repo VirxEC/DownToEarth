@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from time import time_ns
+from traceback import print_exc
 
 import virx_erlu_rlib as rlru
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
@@ -54,9 +55,9 @@ class Bot(BaseAgent):
         if self.shot is not None:
             self.pop()
         
+        rlru.confirm_target(shot)
         self.shot = shot
         self.shot_time = shot_time
-        rlru.confirm_target(self.shot)
 
     def get_output(self, packet: GameTickPacket):
         if not self.ready:
@@ -75,12 +76,10 @@ class Bot(BaseAgent):
         if self.me.airborne:
             return SimpleControllerState(throttle=1)
 
-        if self.shot is not None:
-            if new_touch or self.shot_time < self.time:
-                self.pop()
+        if self.shot is not None and new_touch:
+            self.pop()
 
         rlru.tick(packet)
-        rlru.print_targets()
 
         if self.shot is None:
             shot = rlru.new_target(*self.target, self.index)
@@ -127,11 +126,11 @@ class Bot(BaseAgent):
             shot_info = rlru.get_data_for_shot_with_target(self.shot)
         except AssertionError:
             self.pop()
-            print("Ball location changed")
+            print_exc()
             return SimpleControllerState()
-        except Exception as e:
+        except Exception:
             self.pop()
-            print(f"Error getting shot info: {e}")
+            print_exc()
             return SimpleControllerState()
 
         if len(shot_info.path_samples) > 2:
@@ -183,14 +182,14 @@ class Bot(BaseAgent):
 
             elif throttle_boost_transition < acceleration:
                 controller.throttle = 1
-                if t > 0 and controller.steer < 1:
-                    controller.boost = True
+                controller.boost = t > 0
 
         end = time_ns()
         self.tick_times.append(round((end - start) / 1_000_000, 3))
         while len(self.tick_times) > 120:
             del self.tick_times[0]
-        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(self.shot_time, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}", self.renderer.team_color(alt_color=True))
+
+        self.renderer.draw_string_3d(tuple(self.me.location), 2, 2, f"Intercept time: {round(self.shot_time, 2)}\nAverage ms/t: {round(sum(self.tick_times) / len(self.tick_times), 3)}\nTargets length: {rlru.get_targets_length()}", self.renderer.team_color(alt_color=True))
 
         # return SimpleControllerState()
         return controller
