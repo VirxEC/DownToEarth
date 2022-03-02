@@ -112,6 +112,9 @@ class Vector:
     def from_vector(vec: Vector3) -> Vector:
         return Vector(vec.x, vec.y, vec.z)
 
+    def to_vector3(self) -> Vector3:
+        return Vector3(self.x, self.y, self.z)
+
     def magnitude(self) -> float:
         # Returns the length of the vector
         return np.linalg.norm(self._np).item()

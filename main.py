@@ -20,7 +20,7 @@ BRAKE_COAST_TRANSITION = -(0.45 * BRAKE_ACC + 0.55 * COAST_ACC)  # -1863.75
 COASTING_THROTTLE_TRANSITION = -0.5 * COAST_ACC  # -262.5
 MIN_WALL_SPEED = -0.5 * BRAKE_ACC  # -1750
 
-MAX_TURN_RADIUS = 1. / 0.00088
+MAX_TURN_RADIUS = 1 / 0.00088
 
 NO_ADJUST_RADIANS = 0.001
 MIN_ADJUST_RADIANS = 0.5
@@ -128,9 +128,9 @@ class Bot(BaseAgent):
             self.pop()
             print_exc()
             return SimpleControllerState()
-        except Exception:
+        except ValueError:
+            # We ran out of time
             self.pop()
-            print_exc()
             return SimpleControllerState()
 
         if len(shot_info.path_samples) > 2:
